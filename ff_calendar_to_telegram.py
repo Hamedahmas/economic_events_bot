@@ -124,10 +124,16 @@ def send_to_telegram(text):
 if __name__ == "__main__":
     events = fetch_forex_factory_events()
 
-    # 🚨 دیباگ - چاپ خروجی
-    print(f"\n✅ تعداد رویدادها دریافت‌شده: {len(events)}")
-    for i, e in enumerate(events, 1):
-        print(f"{i}. {e}")
+    if not events:
+        print("⛔ هیچ رویدادی از سایت دریافت نشد!")
+    else:
+        print(f"\n✅ تعداد رویدادها: {len(events)}\n")
+        for i, e in enumerate(events, 1):
+            print(f"{i}. currency: {e['currency']} | category: {e['category']} | time: {e['time']}")
 
-    msg = format_message(events)
-    send_to_telegram(msg)
+    # ارسال تستی بدون فیلترسازی
+    message = "📦 داده‌های خام دریافت‌شده:\n\n"
+    for e in events:
+        message += f"{e['currency']} | {e['category']} | {e['time']}\n"
+
+    send_to_telegram(message)
