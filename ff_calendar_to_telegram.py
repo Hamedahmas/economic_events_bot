@@ -1,15 +1,16 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-import pytz
 from telegram import Bot
+import pytz
+import time
 
-# اطلاعات تلگرام
-TELEGRAM_BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
-TELEGRAM_CHANNEL_ID = '-1002509441378'
+# توکن و آیدی کانال تلگرام
+BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
+CHANNEL_ID = '-1002509441378'
 
-# کشورها و پرچم‌ها
-COUNTRIES = {
+# ارزهای هدف
+TARGET_COUNTRIES = {
     'USD': '🇺🇸 USA',
     'EUR': '🇪🇺 EUD',
     'GBP': '🇬🇧 GBP',
@@ -18,122 +19,94 @@ COUNTRIES = {
     'CAD': '🇨🇦 CAD'
 }
 
-# دسته‌بندی رویدادها
-KEYWORD_CATEGORIES = {
-    'Interest Rate': ['interest rate', 'refinancing rate', 'rate statement', 'policy rate', 'fed funds rate'],
-    'CPI': ['cpi', 'consumer price index'],
-    'Inflation Rate': ['inflation'],
-    'Unemployment Rate': ['unemployment', 'non-farm payroll', 'employment'],
-    'GDP': ['gdp', 'gross domestic product'],
-    'Current Account': ['current account'],
-    'Government Budget': ['budget balance', 'government budget'],
-    'Debt to GDP': ['debt to gdp', 'government debt']
-}
-
-# ترجمه فارسی رویدادها
-TRANSLATIONS = {
+# کلیدواژه‌های مهم
+KEYWORDS = {
     'Interest Rate': 'نرخ بهره',
     'CPI': 'تورم',
-    'Inflation Rate': 'تورم',
-    'Unemployment Rate': 'بیکاری',
+    'Inflation': 'تورم',
+    'Unemployment': 'بیکاری',
     'GDP': 'تولید ناخالص داخلی',
     'Current Account': 'حساب جاری',
-    'Government Budget': 'تراز بودجه دولت',
-    'Debt to GDP': 'نسبت بدهی به تولید ناخالص داخلی'
+    'Budget': 'تراز بودجه دولت',
+    'Debt': 'نسبت بدهی به تولید ناخالص داخلی'
 }
 
-def match_category(title):
-    title = title.lower()
-    for category, keywords in KEYWORD_CATEGORIES.items():
-        if any(keyword in title for keyword in keywords):
-            return category
-    return None
+def fetch_investing_calendar():
+    url = "https://www.investing.com/economic-calendar/"
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+    }
 
-def fetch_forex_factory_events():
-    url = 'https://www.forexfactory.com/calendar.php'
-    headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers)
+    session = requests.Session()
+    session.headers.update(headers)
+    response = session.get(url)
+
     soup = BeautifulSoup(response.content, 'html.parser')
+    rows = soup.select('table.genTbl.closedTbl.ecEventsTable tr.js-event-item')
 
-    rows = soup.select('table.calendar__table tr.calendar__row')
     events = []
 
     for row in rows:
         try:
-            time_cell = row.select_one('td.calendar__time')
-            currency_cell = row.select_one('td.calendar__currency')
-            title_cell = row.select_one('td.calendar__event-title')
+            country = row['data-country']
+            currency = row['data-event-currency']
+            event_title = row['data-event-name'].strip()
+            date_time = row.select_one('.first.left.time') or row.select_one('.time')
+            if not date_time:
+                continue
+            time_str = date_time.get_text(strip=True)
 
-            if not (time_cell and currency_cell and title_cell):
+            # فیلتر کشور
+            if currency not in TARGET_COUNTRIES:
                 continue
 
-            currency = currency_cell.text.strip()
-            title = title_cell.text.strip()
-            time_text = time_cell.text.strip()
-
-            if currency not in COUNTRIES:
+            # تطبیق عنوان رویداد با کلیدواژه‌ها
+            matched_key = next((k for k in KEYWORDS if k.lower() in event_title.lower()), None)
+            if not matched_key:
                 continue
 
-            matched = match_category(title)
-            if not matched:
-                continue
-
-            if ':' in time_text:
-                try:
-                    if 'am' in time_text.lower() or 'pm' in time_text.lower():
-                        time_obj = datetime.strptime(time_text, '%I:%M%p')
-                    else:
-                        time_obj = datetime.strptime(time_text, '%H:%M')
-                except:
-                    continue
+            # ساخت datetime دقیق
+            today = datetime.utcnow().date()
+            if ':' in time_str:
+                hour, minute = map(int, time_str.split(':'))
             else:
                 continue
-
-            today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            full_time = today.replace(hour=time_obj.hour, minute=time_obj.minute)
-            tehran_time = full_time.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Tehran'))
+            dt_utc = datetime(today.year, today.month, today.day, hour, minute, tzinfo=pytz.UTC)
+            dt_tehran = dt_utc.astimezone(pytz.timezone("Asia/Tehran"))
 
             events.append({
                 'currency': currency,
-                'category': matched,
-                'time': tehran_time.strftime('%Y/%m/%d | %H:%M')
+                'event': matched_key,
+                'fa_event': KEYWORDS[matched_key],
+                'time': dt_tehran.strftime('%Y/%m/%d | %H:%M')
             })
 
         except Exception as e:
-            print(f'⚠️ خطا در ردیف: {e}')
+            print("⚠️ خطا:", e)
             continue
 
     return events
 
 def format_message(events):
     message = "📆تاریخ و زمان انتشار :\n\n"
-    for code, name in COUNTRIES.items():
+    for code, name in TARGET_COUNTRIES.items():
         message += f"{name}\n\n"
-        for category in KEYWORD_CATEGORIES:
-            event = next((e for e in events if e['currency'] == code and e['category'] == category), None)
-            time_str = event['time'] if event else '—'
-            fa_name = TRANSLATIONS[category]
-            message += f"{category} ({fa_name})\n{time_str}\n\n"
+        for key, fa in KEYWORDS.items():
+            e = next((ev for ev in events if ev['currency'] == code and ev['event'] == key), None)
+            t = e['time'] if e else '—'
+            message += f"{key} ({fa})\n{t}\n\n"
         message += "—————————————————-\n"
     return message.strip()
 
-def send_to_telegram(text):
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
-    bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=text)
+def send_to_telegram(message):
+    bot = Bot(token=BOT_TOKEN)
+    bot.send_message(chat_id=CHANNEL_ID, text=message)
 
 if __name__ == "__main__":
-    events = fetch_forex_factory_events()
-
-    if not events:
-        print("⛔ هیچ رویدادی از سایت دریافت نشد!")
-    else:
-        print(f"\n✅ تعداد رویدادها: {len(events)}\n")
-        for i, e in enumerate(events, 1):
-            print(f"{i}. currency: {e['currency']} | category: {e['category']} | time: {e['time']}")
-
-    # ارسال تستی بدون فیلترسازی
-    message = "📦 داده‌های خام دریافت‌شده:\n\n"
+    events = fetch_investing_calendar()
+    print(f"✅ دریافت {len(events)} رویداد")
     for e in events:
-        message += f"{e['currency']} | {e['category']} | {e['time']}\n"
+        print(e)
 
-    send_to_telegram(message)
+    msg = format_message(events)
+    send_to_telegram(msg)
