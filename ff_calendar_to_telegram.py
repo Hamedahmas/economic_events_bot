@@ -4,11 +4,11 @@ from datetime import datetime
 import pytz
 from telegram import Bot
 
-# تنظیمات تلگرام
+# اطلاعات تلگرام
 TELEGRAM_BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
 TELEGRAM_CHANNEL_ID = '-1002509441378'
 
-# کشورهای موردنظر
+# کشورها و پرچم‌ها
 COUNTRIES = {
     'USD': '🇺🇸 USA',
     'EUR': '🇪🇺 EUD',
@@ -18,7 +18,7 @@ COUNTRIES = {
     'CAD': '🇨🇦 CAD'
 }
 
-# کلیدواژه‌های تطبیق
+# دسته‌بندی رویدادها
 KEYWORD_CATEGORIES = {
     'Interest Rate': ['interest rate', 'refinancing rate', 'rate statement', 'policy rate', 'fed funds rate'],
     'CPI': ['cpi', 'consumer price index'],
@@ -30,7 +30,7 @@ KEYWORD_CATEGORIES = {
     'Debt to GDP': ['debt to gdp', 'government debt']
 }
 
-# ترجمه‌ها
+# ترجمه فارسی رویدادها
 TRANSLATIONS = {
     'Interest Rate': 'نرخ بهره',
     'CPI': 'تورم',
@@ -123,5 +123,11 @@ def send_to_telegram(text):
 
 if __name__ == "__main__":
     events = fetch_forex_factory_events()
+
+    # 🚨 دیباگ - چاپ خروجی
+    print(f"\n✅ تعداد رویدادها دریافت‌شده: {len(events)}")
+    for i, e in enumerate(events, 1):
+        print(f"{i}. {e}")
+
     msg = format_message(events)
     send_to_telegram(msg)
