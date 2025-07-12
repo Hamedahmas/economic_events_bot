@@ -1,8 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
-import telegram
+from telegram import Bot
 
 # توکن ربات و آی‌دی کانال
 TELEGRAM_BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
@@ -48,7 +48,8 @@ def fetch_forex_factory_events():
             if currency not in COUNTRIES:
                 continue
 
-            if not any(e.lower() in title.lower() for e in TARGET_EVENTS):
+            matched_event = next((e for e in TARGET_EVENTS if e.lower() in title.lower()), None)
+            if not matched_event:
                 continue
 
             date_str = row.get('data-event-datetime')
@@ -60,11 +61,12 @@ def fetch_forex_factory_events():
 
             events.append({
                 'currency': currency,
-                'title': title,
+                'title': matched_event,
                 'time': tehran_time.strftime('%Y/%m/%d | %H:%M')
             })
 
-        except Exception:
+        except Exception as e:
+            print(f"خطا: {e}")
             continue
 
     return events
@@ -98,7 +100,7 @@ def translate_event_name(name):
     return mapping.get(name, '')
 
 def send_to_telegram(text):
-    bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
     bot.send_message(chat_id=TELEGRAM_CHANNEL_ID, text=text)
 
 if __name__ == "__main__":
