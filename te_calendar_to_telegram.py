@@ -4,7 +4,7 @@ import pytz
 from telegram import Bot
 
 # 🟡 API KEY - شما باید آن را از سایت TradingEconomics دریافت و جایگزین کنید
-TE_API_KEY = 'guest:YOUR_REAL_API_KEY_HERE'  # ← حتماً جایگزین شود
+TE_API_KEY = 'guest:6fdc38bb-abcd-1234-9aaa-78e92bdcf4fe'  # ← حتماً جایگزین شود
 
 # 🔹 تلگرام
 BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
