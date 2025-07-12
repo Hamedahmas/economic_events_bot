@@ -4,11 +4,11 @@ from datetime import datetime
 import pytz
 from telegram import Bot
 
-# اطلاعات تلگرام
+# تنظیمات تلگرام
 TELEGRAM_BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
 TELEGRAM_CHANNEL_ID = '-1002509441378'
 
-# کشورها و معادل پرچم و اسم
+# کشورهای موردنظر
 COUNTRIES = {
     'USD': '🇺🇸 USA',
     'EUR': '🇪🇺 EUD',
@@ -18,8 +18,20 @@ COUNTRIES = {
     'CAD': '🇨🇦 CAD'
 }
 
-# رویدادهای مهم هدف
-TARGET_EVENTS = {
+# کلیدواژه‌های تطبیق
+KEYWORD_CATEGORIES = {
+    'Interest Rate': ['interest rate', 'refinancing rate', 'rate statement', 'policy rate', 'fed funds rate'],
+    'CPI': ['cpi', 'consumer price index'],
+    'Inflation Rate': ['inflation'],
+    'Unemployment Rate': ['unemployment', 'non-farm payroll', 'employment'],
+    'GDP': ['gdp', 'gross domestic product'],
+    'Current Account': ['current account'],
+    'Government Budget': ['budget balance', 'government budget'],
+    'Debt to GDP': ['debt to gdp', 'government debt']
+}
+
+# ترجمه‌ها
+TRANSLATIONS = {
     'Interest Rate': 'نرخ بهره',
     'CPI': 'تورم',
     'Inflation Rate': 'تورم',
@@ -29,6 +41,13 @@ TARGET_EVENTS = {
     'Government Budget': 'تراز بودجه دولت',
     'Debt to GDP': 'نسبت بدهی به تولید ناخالص داخلی'
 }
+
+def match_category(title):
+    title = title.lower()
+    for category, keywords in KEYWORD_CATEGORIES.items():
+        if any(keyword in title for keyword in keywords):
+            return category
+    return None
 
 def fetch_forex_factory_events():
     url = 'https://www.forexfactory.com/calendar.php'
@@ -55,25 +74,28 @@ def fetch_forex_factory_events():
             if currency not in COUNTRIES:
                 continue
 
-            matched_event = next((e for e in TARGET_EVENTS if e.lower() in title.lower()), None)
-            if not matched_event:
+            matched = match_category(title)
+            if not matched:
                 continue
 
-            # بررسی و ساخت زمان از time_text
-            if 'am' in time_text.lower() or 'pm' in time_text.lower():
-                time_obj = datetime.strptime(time_text, '%I:%M%p')
-            elif ':' in time_text:
-                time_obj = datetime.strptime(time_text, '%H:%M')
+            if ':' in time_text:
+                try:
+                    if 'am' in time_text.lower() or 'pm' in time_text.lower():
+                        time_obj = datetime.strptime(time_text, '%I:%M%p')
+                    else:
+                        time_obj = datetime.strptime(time_text, '%H:%M')
+                except:
+                    continue
             else:
-                continue  # زمان‌های نامشخص
+                continue
 
             today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-            final_time = today.replace(hour=time_obj.hour, minute=time_obj.minute)
-            tehran_time = final_time.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Tehran'))
+            full_time = today.replace(hour=time_obj.hour, minute=time_obj.minute)
+            tehran_time = full_time.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Tehran'))
 
             events.append({
                 'currency': currency,
-                'title': matched_event,
+                'category': matched,
                 'time': tehran_time.strftime('%Y/%m/%d | %H:%M')
             })
 
@@ -87,10 +109,11 @@ def format_message(events):
     message = "📆تاریخ و زمان انتشار :\n\n"
     for code, name in COUNTRIES.items():
         message += f"{name}\n\n"
-        for eng_title, fa_title in TARGET_EVENTS.items():
-            match = next((e for e in events if e['currency'] == code and e['title'] == eng_title), None)
-            time_str = match['time'] if match else '—'
-            message += f"{eng_title} ({fa_title})\n{time_str}\n\n"
+        for category in KEYWORD_CATEGORIES:
+            event = next((e for e in events if e['currency'] == code and e['category'] == category), None)
+            time_str = event['time'] if event else '—'
+            fa_name = TRANSLATIONS[category]
+            message += f"{category} ({fa_name})\n{time_str}\n\n"
         message += "—————————————————-\n"
     return message.strip()
 
