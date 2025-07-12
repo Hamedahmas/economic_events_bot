@@ -1,15 +1,15 @@
-name: Daily Economic Events Bot
+name: Daily Economic Calendar Bot
 
 on:
   schedule:
-    - cron: "30 6 * * *"
+    - cron: "0 6 * * *"  # اجرای خودکار هر روز ساعت 06:00 UTC
   workflow_dispatch:
 
 jobs:
-  run-script:
+  run:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -21,4 +21,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run script
-        run: python ff_calendar_to_telegram.py
+        run: python te_calendar_to_telegram.py
+        env:
+          TE_API_KEY: ${{ secrets.TE_API_KEY }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
