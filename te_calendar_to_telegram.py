@@ -1,25 +1,29 @@
-import requests
+import tradingeconomics as te
 from datetime import datetime
 import pytz
 from telegram import Bot
-import os
 
-# 🟡 خواندن متغیرها از محیط (GitHub Secrets)
-TE_API_KEY = os.environ['TE_API_KEY']
-BOT_TOKEN = os.environ['BOT_TOKEN']
-CHANNEL_ID = os.environ['CHANNEL_ID']
+# 🟡 API KEY - شما باید آن را از سایت TradingEconomics دریافت و جایگزین کنید
+TE_API_KEY = 'guest:YOUR_REAL_API_KEY_HERE'  # ← حتماً جایگزین شود
 
-# کشورها و پرچم‌ها
+# 🔹 تلگرام
+BOT_TOKEN = '8152855589:AAHJuCR3tba9uAQxJW1JBLYxNSfDb8oRf0A'
+CHANNEL_ID = '-1002509441378'
+
+# لاگین به TE API
+te.login(TE_API_KEY)
+
+# کشورها / پرچم
 TARGET_COUNTRIES = {
     "United States": "🇺🇸 USA",
     "Euro Area": "🇪🇺 EUD",
-    "Japan": "🇯🇵 JPY",
     "United Kingdom": "🇬🇧 GBP",
+    "Japan": "🇯🇵 JPY",
     "Canada": "🇨🇦 CAD",
     "Australia": "🇦🇺 AUD"
 }
 
-# رویدادهای مهم
+# رویدادهای هدف
 KEYWORDS = {
     "Interest Rate": "نرخ بهره",
     "Inflation Rate": "تورم",
@@ -31,51 +35,41 @@ KEYWORDS = {
 }
 
 def fetch_te_events():
-    url = f"https://api.tradingeconomics.com/calendar?c={TE_API_KEY}&f=json"
-    res = requests.get(url)
-    data = res.json()
-
+    data = te.getCalendarData(output_type='dict')
     events = []
 
-    for event in data:
-        try:
-            country = event.get("Country")
-            category = event.get("Category")
-            datetime_str = event.get("Date")
+    for ev in data:
+        country = ev.get('Country')
+        category = ev.get('Category')
+        date_str = ev.get('Date')
 
-            if not country or country not in TARGET_COUNTRIES:
-                continue
-
-            if not category:
-                continue
-
-            matched = next((k for k in KEYWORDS if k.lower() in category.lower()), None)
-            if not matched:
-                continue
-
-            dt_utc = datetime.strptime(datetime_str, "%Y-%m-%dT%H:%M:%S")
-            dt_utc = dt_utc.replace(tzinfo=pytz.UTC)
-            dt_tehran = dt_utc.astimezone(pytz.timezone("Asia/Tehran"))
-
-            events.append({
-                "country": country,
-                "event": matched,
-                "fa_event": KEYWORDS[matched],
-                "time": dt_tehran.strftime('%Y/%m/%d | %H:%M')
-            })
-        except:
+        if not country or country not in TARGET_COUNTRIES:
             continue
+
+        matched = next((k for k in KEYWORDS if k.lower() in (category or '').lower()), None)
+        if not matched:
+            continue
+
+        dt_utc = datetime.fromisoformat(date_str)
+        dt_tehran = dt_utc.astimezone(pytz.timezone('Asia/Tehran'))
+
+        events.append({
+            'country': country,
+            'event': matched,
+            'fa_event': KEYWORDS[matched],
+            'time': dt_tehran.strftime('%Y/%m/%d | %H:%M')
+        })
 
     return events
 
 def format_message(events):
-    message = "📆تاریخ و زمان انتشار:\n\n"
+    message = "📆 تاریخ و زمان انتشار:\n\n"
     for country, flag in TARGET_COUNTRIES.items():
         message += f"{flag}\n\n"
         for key, fa in KEYWORDS.items():
-            match = next((e for e in events if e['country'] == country and e['event'] == key), None)
-            time = match['time'] if match else "—"
-            message += f"{key} ({fa})\n{time}\n\n"
+            e = next((ev for ev in events if ev['country'] == country and ev['event'] == key), None)
+            t = e['time'] if e else "—"
+            message += f"{key} ({fa})\n{t}\n\n"
         message += "—————————————————-\n"
     return message.strip()
 
